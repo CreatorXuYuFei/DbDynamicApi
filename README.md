@@ -7,5 +7,5 @@ Enterprise.Configuration -v2.1.1  <br>
 CoreLogger -v2.1.0 <br>
 
 ## 源码地址
-https://github.com/CreatorXuYuFei/Enterprise.Configuration.git
+https://github.com/CreatorXuYuFei/Enterprise.Configuration.git <br>
 https://github.com/CreatorXuYuFei/CoreLogger.git
