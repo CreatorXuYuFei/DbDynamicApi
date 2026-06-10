@@ -1,0 +1,2 @@
+# DbDynamicApi
+基于NewLife.XCod封装的一个通用数据库访问操作API服务
