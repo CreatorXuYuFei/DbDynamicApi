@@ -2,8 +2,10 @@
 using Model.EnumModel;
 using Model.InfoModel;
 using NewLife.Data;
+using System.Data;
 using ToolService;
 using XCode.DataAccessLayer;
+using XCode.Exceptions;
 
 namespace DbDynamicService
 {
@@ -177,25 +179,41 @@ namespace DbDynamicService
                 if (batchFieldValues == null || batchFieldValues.Count == 0)
                     return new DbResult { Success = false, Message = "批量数据不能为空" };
 
+                const int OnceMaxCount = 150;
                 var dal = GetDal(dbConnName);
-                var first = batchFieldValues.First();
+                int totalEffect = 0;
 
-                //字段拼接
-                string fields = string.Join(",", first.Keys.Select(k => $"`{k}`"));
-                //参数用 @字段名
-                string values = string.Join(",", first.Keys.Select(k => $"@{k}"));
-                string sql = $"INSERT INTO `{tableName}` ({fields}) VALUES ({values})";
-
-                List<Dictionary<string, object>> pairs = [];
-                foreach (var dic in batchFieldValues)
+                for (int start = 0; start < batchFieldValues.Count; start += OnceMaxCount)
                 {
-                    pairs.Add(FixStringValues(dic));
+                    var slice = batchFieldValues.Skip(start).Take(OnceMaxCount).ToList();
+                    var safeData = slice.Select(FixStringValues).ToList();
+                    var fields = safeData[0].Keys.ToList();
+
+                    List<string> rowTemplates = new();
+                    Dictionary<string, object> allParams = new();
+
+                    for (int i = 0; i < safeData.Count; i++)
+                    {
+                        var row = safeData[i];
+                        List<string> placeholders = new();
+                        foreach (var f in fields)
+                        {
+                            string pName = $"p_{i}_{f}";
+                            placeholders.Add($"@{pName}");
+                            allParams[pName] = row[f];
+                        }
+                        rowTemplates.Add($"({string.Join(",", placeholders)})");
+                    }
+
+                    string sql = $@"
+                                INSERT INTO `{tableName}` ({string.Join(",", fields.Select(x => $"`{x}`"))})
+                                VALUES {string.Join(",", rowTemplates)};
+                                ";
+                    int rows = await dal.ExecuteAsync(sql, allParams);
+                    totalEffect += rows;
                 }
 
-                //XCode 批量插入原生支持 List<Dictionary>，直接传
-                int rows = await dal.ExecuteAsync(sql, pairs);
-
-                return new DbResult { Success = true, AffectedRows = rows };
+                return new DbResult { Success = true, AffectedRows = totalEffect };
             }
             catch (Exception ex)
             {
